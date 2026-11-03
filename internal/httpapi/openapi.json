@@ -1,0 +1,514 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Plug API",
+    "version": "1.0.0",
+    "description": "Direct Tuya LAN 3.5 access. Device routes open a new session for each operation; there is no state cache or background polling. Listing IDs never contacts devices. A fresh response may contain previously sampled measurements. Writes are verified with STATUS and never automatically retried. An unknown write result means the change may already have been applied. Bearer authentication is required only when http.token is configured."
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    },
+    {}
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "health",
+        "summary": "Check the HTTP service without contacting devices",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Service is running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugs": {
+      "get": {
+        "operationId": "listPlugs",
+        "summary": "List configured IDs without contacting devices",
+        "responses": {
+          "200": {
+            "description": "IDs in configuration order; availability is not checked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "plugs"
+                  ],
+                  "properties": {
+                    "plugs": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "plugs": [
+                    "desk-plug",
+                    "lamp-plug"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/plugs/{id}/state": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/PlugID"
+        }
+      ],
+      "get": {
+        "operationId": "readState",
+        "summary": "Read state directly from the plug",
+        "description": "Uses STATUS (command 16), without UPDATEDPS or heartbeat. Missing fields are null. received_at is server receipt time, not the time of physical measurement. Energy reports are not a cumulative meter and must not be blindly summed.",
+        "responses": {
+          "200": {
+            "description": "Values from this device response only",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/State"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/plugs/{id}/dps": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/PlugID"
+        }
+      ],
+      "get": {
+        "operationId": "readDPS",
+        "summary": "Read raw DPS for diagnostics",
+        "responses": {
+          "200": {
+            "description": "Fresh STATUS response with raw, unscaled values",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "received_at",
+                    "dps"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "received_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "dps": {
+                      "type": "object",
+                      "additionalProperties": {}
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/plugs/{id}/relay": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/PlugID"
+        }
+      ],
+      "put": {
+        "operationId": "setRelay",
+        "summary": "Set and verify relay state",
+        "description": "Physically changes power to the connected load. Performs STATUS, CONTROL_NEW, then STATUS. Never retries CONTROL. If the result is unknown, read state before deciding whether to retry.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "on"
+                ],
+                "properties": {
+                  "on": {
+                    "type": "boolean"
+                  }
+                }
+              },
+              "example": {
+                "on": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Requested state was confirmed by STATUS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "received_at",
+                    "result",
+                    "relay_on"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "received_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "result": {
+                      "type": "string",
+                      "enum": [
+                        "confirmed"
+                      ]
+                    },
+                    "relay_on": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/plugs/{id}/settings": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/PlugID"
+        }
+      ],
+      "get": {
+        "operationId": "readSettings",
+        "summary": "Read settings directly from the plug",
+        "responses": {
+          "200": {
+            "description": "Missing settings are null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateSettings",
+        "summary": "Write and verify selected settings",
+        "description": "Only supplied fields are changed. Null and unknown fields are rejected. All requested DPS must be present with the expected type in a preflight STATUS. The write is not transactional; an unknown result may include partially applied changes. Countdown can switch the load later. Overcharge protection behavior is firmware-specific and has not been validated on this plug.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsPatch"
+              },
+              "example": {
+                "indicator_mode": "relay"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Requested values were confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "received_at",
+                    "result",
+                    "settings"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "received_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "result": {
+                      "type": "string",
+                      "enum": [
+                        "confirmed"
+                      ]
+                    },
+                    "settings": {
+                      "$ref": "#/components/schemas/Settings"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "parameters": {
+      "PlugID": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        },
+        "example": "desk-plug"
+      }
+    },
+    "responses": {
+      "Error": {
+        "description": "400 invalid input; 401 unauthorized; 404 unknown ID; 408 canceled; 413 body too large; 415 wrong content type; 422 unsupported setting; 502 device or verification failure; 503 queue full; 504 timeout; 500 internal error. result=failed means no write was attempted; result=unknown means a write may have been applied. No stale state is returned.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": [
+                "error"
+              ],
+              "properties": {
+                "error": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message",
+                    "result"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "result": {
+                      "type": "string",
+                      "enum": [
+                        "failed",
+                        "unknown"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "State": {
+        "type": "object",
+        "required": [
+          "id",
+          "received_at",
+          "relay_on",
+          "current_a",
+          "power_w",
+          "voltage_v",
+          "energy_report_wh",
+          "fault"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "received_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "relay_on": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "current_a": {
+            "type": "number",
+            "nullable": true,
+            "description": "DPS 18 / 1000, amperes"
+          },
+          "power_w": {
+            "type": "number",
+            "nullable": true,
+            "description": "DPS 19 / 10, watts"
+          },
+          "voltage_v": {
+            "type": "number",
+            "nullable": true,
+            "description": "DPS 20 / 10, volts"
+          },
+          "energy_report_wh": {
+            "type": "number",
+            "nullable": true,
+            "description": "DPS 17 in Wh. Report semantics and duplicate handling need validation. Not total energy."
+          },
+          "fault": {
+            "type": "integer",
+            "minimum": 0,
+            "nullable": true,
+            "description": "DPS 26 bitmask; 0 means no reported fault flags"
+          }
+        }
+      },
+      "Settings": {
+        "type": "object",
+        "properties": {
+          "countdown_seconds": {
+            "type": "integer",
+            "nullable": true
+          },
+          "power_on_state": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "off",
+              "on",
+              "memory",
+              null
+            ]
+          },
+          "overcharge_protection": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "indicator_mode": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "relay",
+              "pos",
+              "none",
+              "on",
+              null
+            ]
+          },
+          "child_lock": {
+            "type": "boolean",
+            "nullable": true
+          }
+        }
+      },
+      "SettingsPatch": {
+        "type": "object",
+        "additionalProperties": false,
+        "minProperties": 1,
+        "properties": {
+          "countdown_seconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 86400
+          },
+          "power_on_state": {
+            "type": "string",
+            "enum": [
+              "off",
+              "on",
+              "memory"
+            ]
+          },
+          "overcharge_protection": {
+            "type": "boolean"
+          },
+          "indicator_mode": {
+            "type": "string",
+            "enum": [
+              "relay",
+              "pos",
+              "none",
+              "on"
+            ]
+          },
+          "child_lock": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SettingsResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "received_at",
+          "settings"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "received_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/Settings"
+          }
+        }
+      }
+    }
+  }
+}

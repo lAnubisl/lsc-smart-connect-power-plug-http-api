@@ -1,0 +1,25 @@
+[Unit]
+Description=Local HTTP API for Tuya smart plugs
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=plug-api
+Group=plug-api
+WorkingDirectory=/etc/plug-api
+ExecStart=/usr/local/bin/plug-api -config /etc/plug-api/config.json
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=135
+UMask=0027
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=plug-api
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

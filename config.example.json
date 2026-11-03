@@ -1,0 +1,16 @@
+{
+  "http": {
+    "listen": "127.0.0.1:8080",
+    "request_timeout_seconds": 15,
+    "token": ""
+  },
+  "logging": {
+    "level": "info",
+    "otel": {
+      "enabled": false,
+      "endpoint": "http://127.0.0.1:4318",
+      "service_name": "plug-api"
+    }
+  },
+  "plugs": []
+}

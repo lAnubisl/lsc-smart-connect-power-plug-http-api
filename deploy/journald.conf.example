@@ -1,0 +1,3 @@
+# Optional host-wide persistent journal storage.
+[Journal]
+Storage=persistent
