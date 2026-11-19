@@ -14,9 +14,10 @@ import (
 )
 
 type Config struct {
-	HTTP    HTTP    `json:"http"`
-	Logging Logging `json:"logging"`
-	Plugs   []Plug  `json:"plugs"`
+	HTTP      HTTP     `json:"http"`
+	Logging   Logging  `json:"logging"`
+	Plugs     []Device `json:"plugs"`
+	LEDStrips []Device `json:"lights"`
 }
 
 type HTTP struct {
@@ -34,7 +35,7 @@ type Logging struct {
 	} `json:"otel"`
 }
 
-type Plug struct {
+type Device struct {
 	ID       string `json:"id"`
 	Name     string `json:"name"`
 	Address  string `json:"address"`
@@ -106,24 +107,34 @@ func (c *Config) validate() error {
 	devices := make(map[string]bool)
 	addresses := make(map[string]bool)
 	idPattern := regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$`)
-	for i, p := range c.Plugs {
-		if !idPattern.MatchString(p.ID) || ids[p.ID] {
-			return fmt.Errorf("plugs[%d]: id must be unique and contain 1..64 letters, digits, underscores, or hyphens", i)
+	for _, group := range []struct {
+		name    string
+		profile string
+		devices []Device
+	}{
+		{"plugs", "lsc-3202087-2", c.Plugs},
+		{"lights", "lsc-neon-strip", c.LEDStrips},
+	} {
+		for i, p := range group.devices {
+			label := fmt.Sprintf("%s[%d]", group.name, i)
+			if !idPattern.MatchString(p.ID) || ids[p.ID] {
+				return fmt.Errorf("%s: id must be unique and contain 1..64 letters, digits, underscores, or hyphens", label)
+			}
+			if strings.TrimSpace(p.DeviceID) == "" || devices[p.DeviceID] {
+				return fmt.Errorf("%s: device_id must be nonempty and unique", label)
+			}
+			ip := net.ParseIP(p.Address)
+			if ip == nil || ip.IsUnspecified() || ip.IsMulticast() || addresses[ip.String()] {
+				return fmt.Errorf("%s: address must be a unique unicast IP address", label)
+			}
+			if len(p.LocalKey) != 16 {
+				return fmt.Errorf("%s: local_key must contain exactly 16 bytes", label)
+			}
+			if p.Protocol != "3.5" || p.Profile != group.profile {
+				return fmt.Errorf("%s: supported protocol is 3.5 and profile is %s", label, group.profile)
+			}
+			ids[p.ID], devices[p.DeviceID], addresses[ip.String()] = true, true, true
 		}
-		if strings.TrimSpace(p.DeviceID) == "" || devices[p.DeviceID] {
-			return fmt.Errorf("plugs[%d]: device_id must be nonempty and unique", i)
-		}
-		ip := net.ParseIP(p.Address)
-		if ip == nil || ip.IsUnspecified() || ip.IsMulticast() || addresses[ip.String()] {
-			return fmt.Errorf("plugs[%d]: address must be a unique unicast IP address", i)
-		}
-		if len([]byte(p.LocalKey)) != 16 {
-			return fmt.Errorf("plugs[%d]: local_key must contain exactly 16 bytes", i)
-		}
-		if p.Protocol != "3.5" || p.Profile != "lsc-3202087-2" {
-			return fmt.Errorf("plugs[%d]: supported protocol is 3.5 and profile is lsc-3202087-2", i)
-		}
-		ids[p.ID], devices[p.DeviceID], addresses[ip.String()] = true, true, true
 	}
 	return nil
 }

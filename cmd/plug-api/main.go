@@ -14,8 +14,9 @@ import (
 
 	"plug-api/internal/config"
 	"plug-api/internal/httpapi"
+	"plug-api/internal/ledstrip"
 	"plug-api/internal/logging"
-	"plug-api/internal/plug"
+	"plug-api/internal/smartplug"
 )
 
 func main() {
@@ -34,7 +35,7 @@ func run() error {
 		return err
 	}
 	if *check {
-		fmt.Printf("Configuration valid: %d plugs\n", len(cfg.Plugs))
+		fmt.Printf("Configuration valid: %d plugs, %d lights\n", len(cfg.Plugs), len(cfg.LEDStrips))
 		return nil
 	}
 	logger, closeLogs, err := logging.New(context.Background(), cfg.Logging)
@@ -51,10 +52,11 @@ func run() error {
 	}()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	plugs := plug.New(cfg.Plugs, logger)
+	plugs := smartplug.New(cfg.Plugs, logger)
+	strips := ledstrip.New(cfg.LEDStrips, logger)
 	server := &http.Server{
 		Addr:              cfg.HTTP.Listen,
-		Handler:           httpapi.New(cfg.HTTP, plugs, logger),
+		Handler:           httpapi.New(cfg.HTTP, plugs, strips, logger),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       5 * time.Second,
 		WriteTimeout:      time.Duration(cfg.HTTP.RequestTimeoutSeconds+10) * time.Second,
@@ -64,7 +66,7 @@ func run() error {
 	}
 	result := make(chan error, 1)
 	go func() { result <- server.ListenAndServe() }()
-	logger.Info("service started", "listen", cfg.HTTP.Listen, "plug_count", len(cfg.Plugs))
+	logger.Info("service started", "listen", cfg.HTTP.Listen, "plug_count", len(cfg.Plugs), "light_count", len(cfg.LEDStrips))
 	select {
 	case err := <-result:
 		if !errors.Is(err, http.ErrServerClosed) {

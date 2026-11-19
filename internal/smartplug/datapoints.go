@@ -1,4 +1,4 @@
-package plug
+package smartplug
 
 // Data-point IDs for the lsc-3202087-2 profile. Tuya encodes these numeric
 // identifiers as JSON object keys, so the constants use their wire strings.

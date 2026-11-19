@@ -3,7 +3,7 @@
   "info": {
     "title": "Plug API",
     "version": "1.0.0",
-    "description": "Direct Tuya LAN 3.5 access. Device routes open a new session for each operation; there is no state cache or background polling. Listing IDs never contacts devices. A fresh response may contain previously sampled measurements. Writes are verified with STATUS and never automatically retried. An unknown write result means the change may already have been applied. Bearer authentication is required only when http.token is configured."
+    "description": "Direct Tuya LAN 3.5 access. Device routes open a new session for each operation; there is no state cache or background polling. Listing IDs never contacts devices. A fresh response may contain previously sampled measurements. State writes are verified with STATUS. Segment and animation writes return the device acknowledgement. The API never automatically resends writes. An unknown write result means the change may already have been applied. Bearer authentication is required only when http.token is configured."
   },
   "security": [
     {
@@ -303,6 +303,326 @@
           }
         }
       }
+    },
+    "/lights": {
+      "get": {
+        "operationId": "listLights",
+        "summary": "List configured light IDs without contacting devices",
+        "responses": {
+          "200": {
+            "description": "Light IDs in configuration order",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "lights"
+                  ],
+                  "properties": {
+                    "lights": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/lights/{id}/state": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/LightID"
+        }
+      ],
+      "get": {
+        "operationId": "readLightState",
+        "summary": "Read state directly from the light",
+        "description": "Missing fields are null. Color and brightness reflect the stored color settings, even when off or in another mode.",
+        "responses": {
+          "200": {
+            "description": "Values from this device response only",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LightState"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "setLightState",
+        "summary": "Set power, whole-strip settings or segment colors",
+        "description": "Global settings are written and verified before segment commands. Segments require the strip to be on in colour mode. Writes are never automatically retried. An unknown result means some changes may already have been applied.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LightPatch"
+              },
+              "examples": {
+                "global": {
+                  "value": {
+                    "on": true,
+                    "color": "#FF8000",
+                    "brightness_percent": 30
+                  }
+                },
+                "segments": {
+                  "value": {
+                    "segments": [
+                      null,
+                      {
+                        "color": "#FF0000",
+                        "brightness_percent": 30
+                      },
+                      {
+                        "color": "#0000FF",
+                        "brightness_percent": 50
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Global state with confirmed for global-only writes or acknowledged when all segment commands were accepted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/LightState"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "result"
+                      ],
+                      "properties": {
+                        "result": {
+                          "type": "string",
+                          "enum": [
+                            "confirmed",
+                            "acknowledged"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/lights/{id}/dps": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/LightID"
+        }
+      ],
+      "get": {
+        "operationId": "readLightDPS",
+        "summary": "Read raw DPS for diagnostics",
+        "responses": {
+          "200": {
+            "description": "Fresh STATUS response with raw, unscaled values",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "received_at",
+                    "dps"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "received_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "dps": {
+                      "type": "object",
+                      "additionalProperties": {}
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/lights/{id}/animation": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/LightID"
+        }
+      ],
+      "post": {
+        "operationId": "startLightAnimation",
+        "summary": "Start a named animation preset",
+        "description": "Starts the requested scene on the strip. If the strip is off, provide on: true. The device acknowledges the scene and the API verifies scene mode using STATUS.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "preset"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "preset": {
+                    "type": "string",
+                    "enum": [
+                      "christmas",
+                      "christmas_eve",
+                      "city_lights",
+                      "colour_marbles",
+                      "dating",
+                      "dream_meteor",
+                      "dream_of_the_sea",
+                      "dream_sea",
+                      "dreamland",
+                      "early_spring",
+                      "fathers_day",
+                      "firefly_night",
+                      "fireworks_at_sea",
+                      "football_day",
+                      "forest_day",
+                      "game",
+                      "glacier_express",
+                      "grassland",
+                      "halloween",
+                      "holiday",
+                      "hut_in_the_snow",
+                      "iceland_blue",
+                      "late_autumn",
+                      "love_and_dream",
+                      "meditation",
+                      "mothers_day",
+                      "neon_world",
+                      "night_service",
+                      "northern_lights",
+                      "northland",
+                      "party",
+                      "planet_journey",
+                      "sea_of_clouds",
+                      "sports",
+                      "spring_fishing",
+                      "spring_outing",
+                      "summer_idyll",
+                      "summer_train",
+                      "summer_wind",
+                      "thanksgiving_day",
+                      "trend",
+                      "valentines_day",
+                      "wind_chime",
+                      "work"
+                    ]
+                  },
+                  "on": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ],
+                    "description": "Turn on the strip with the scene command."
+                  }
+                }
+              },
+              "example": {
+                "preset": "northern_lights",
+                "on": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Scene command acknowledged and scene mode observed in STATUS.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "preset",
+                    "mode",
+                    "received_at",
+                    "result"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "preset": {
+                      "type": "string",
+                      "description": "Echo of the requested preset. STATUS does not report the active preset."
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "scene"
+                      ]
+                    },
+                    "received_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "result": {
+                      "type": "string",
+                      "enum": [
+                        "acknowledged"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -321,6 +641,15 @@
           "type": "string"
         },
         "example": "desk-plug"
+      },
+      "LightID": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Configured light ID",
+        "schema": {
+          "type": "string"
+        }
       }
     },
     "responses": {
@@ -506,6 +835,106 @@
           },
           "settings": {
             "$ref": "#/components/schemas/Settings"
+          }
+        }
+      },
+      "LightState": {
+        "type": "object",
+        "required": [
+          "id",
+          "received_at",
+          "on",
+          "mode",
+          "color",
+          "brightness_percent",
+          "countdown_seconds"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "received_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "on": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "mode": {
+            "type": "string",
+            "nullable": true
+          },
+          "color": {
+            "type": "string",
+            "nullable": true,
+            "description": "Stored color at full HSV value, in #RRGGBB format."
+          },
+          "brightness_percent": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 100
+          },
+          "countdown_seconds": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 86400
+          }
+        }
+      },
+      "LightPatch": {
+        "type": "object",
+        "additionalProperties": false,
+        "minProperties": 1,
+        "properties": {
+          "on": {
+            "type": "boolean"
+          },
+          "color": {
+            "type": "string",
+            "pattern": "^#[0-9A-Fa-f]{6}$",
+            "description": "Sets hue and saturation in colour mode and preserves brightness unless supplied separately. Use on=false for black."
+          },
+          "brightness_percent": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "Sets brightness in colour mode. A brightness-only update preserves stored hue and saturation."
+          },
+          "countdown_seconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 86400,
+            "description": "Use 0 to cancel the timer."
+          },
+          "segments": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 255,
+            "description": "Position 1 is segment 1. Null skips a position. At least one object is required and length must fit the configured count.",
+            "items": {
+              "type": "object",
+              "nullable": true,
+              "additionalProperties": false,
+              "required": [
+                "color",
+                "brightness_percent"
+              ],
+              "properties": {
+                "color": {
+                  "type": "string",
+                  "pattern": "^#[0-9A-Fa-f]{6}$",
+                  "description": "Nonblack #RRGGBB color."
+                },
+                "brightness_percent": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 100
+                }
+              }
+            }
           }
         }
       }

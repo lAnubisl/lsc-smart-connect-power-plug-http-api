@@ -12,5 +12,6 @@
       "service_name": "plug-api"
     }
   },
-  "plugs": []
+  "plugs": [],
+  "lights": []
 }
