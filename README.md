@@ -313,6 +313,9 @@ The maximum request body is 4096 bytes.
 
 ## Raspberry Pi deployment
 
+For automated deployment to the existing the target server installation with Woodpecker CI,
+see [the pipeline setup and required secrets](deploy/WOODPECKER.md).
+
 Build on the Pi with Go 1.26+, or cross-compile from another machine.
 For 64-bit Raspberry Pi OS (POSIX shell):
 

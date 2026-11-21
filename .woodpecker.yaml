@@ -1,0 +1,41 @@
+when:
+  - event: [push, pull_request, manual]
+
+steps:
+  - name: build
+    image: golang:1.26
+    pull: true
+    environment:
+      CGO_ENABLED: "0"
+      GOOS: linux
+      GOARCH: arm
+      GOARM: "6"
+    commands:
+      - mkdir -p bin
+      - go build -trimpath -o bin/plug-api-linux-armv6 ./cmd/plug-api
+      - cd bin && sha256sum plug-api-linux-armv6 > plug-api-linux-armv6.sha256
+
+  - name: deploy
+    image: alpine:3.23
+    pull: true
+    environment:
+      DEPLOY_HOST:
+        from_secret: deploy_host
+      DEPLOY_PORT:
+        from_secret: deploy_port
+      DEPLOY_USER:
+        from_secret: deploy_user
+      DEPLOY_SERVICE_USER:
+        from_secret: deploy_service_user
+      DEPLOY_HEALTH_URL:
+        from_secret: deploy_health_url
+      DEPLOY_SSH_KEY:
+        from_secret: deploy_ssh_key
+      DEPLOY_KNOWN_HOSTS:
+        from_secret: deploy_known_hosts
+    commands:
+      - apk add --no-cache openssh-client
+      - sh deploy/woodpecker-deploy.sh
+    when:
+      - event: [push, manual]
+        branch: main
